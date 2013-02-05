@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html> <!-- manifest="hl.manifest" -->
+<head>
+  <meta name="viewport" content="user-scalable=no, width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <!-- link rel="apple-touch-icon" href="iphone_icon.png"/ -->
+  <!-- link rel="apple-touch-startup-image" href="iphone_startup.png"/ -->
+  <!-- link rel="stylesheet" href="hl.css" type="text/css" media="screen, mobile" title="main" charset="utf-8"/ -->
+
+  <title>Fetch song lyrics from lyricsindia.net</title>
+</head>
+<body onload="setTimeout(function() { window.scrollTo(0,1) }, 100);">
+    <p><label>Song:<input name="title" id="title" size="30"></label> <button id="submit" type="submit"> Fetch </button></p>
+  <hr/>
+  <div id="lyrics-box"></div>
+  <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.5/jquery.min.js"></script>
+  <script type="text/javascript">
+     function processSong( response) {
+       if(capture = /sorry,/i.exec(response)) {
+         return 0;
+       }
+            var lyrics = $(response).find("unidata").text();
+            var title  = $(response).find("unititle").text();
+            var node   = $(response).find("movie");
+            var album = node.children( "name" ).text();
+            var year  = node.children( "year" ).text();
+            var nodelist = $(response).find("singer");
+            var singer = "";
+            nodelist.each(function() {
+                singer = singer + ( singer ? ', ': '' ) + $(this).children( "name" ).text();
+            });
+            var nodelist = $(response).find("composer");
+            var composer = "";
+            nodelist.each(function() {
+                composer = composer + ( composer ? ', ': '' ) + $(this).children( "name" ).text();
+            });
+            var nodelist = $(response).find("lyricist");
+            var lyricist = "";
+            nodelist.each(function() {
+                lyricist = lyricist + ( lyricist ? ', ' : '' ) + $(this).children( "name" ).text();
+            });
+
+            return song = {
+                  'title' : title,
+                  'album' : album,
+                  'year'  : year,
+                  'composer': composer,
+                  'lyricist': lyricist,
+                  'singer': singer,
+                  'lyrics': lyrics };
+
+     }
+
+     var baseurl = "http://192.168.1.150/li/";
+     $(document).ready(function(){
+       $("#submit").click(function(event){
+         var title = $("#title").val();
+         if(!title) $("#lyrics-box").fadeIn(1500, function(){ $("#lyrics-box").html("Please enter a song title ..."); });
+         else {
+           var response = $.ajax({
+             type     : "GET",
+             url      : baseurl + 'search',
+             data     : 'txt=' + title + '&format=xml',
+             dataType : "xml",
+             async    : false,
+             success  : function(msg){
+                          //alert(msg);
+                        },
+             error    : function(msg, status, xhr) {
+                          var msg = "Sorry but there was an error.";
+                          $("#lyrics-box").html(msg + xhr.status + " " + xhr.statusText);
+                        }
+           }).responseText;
+           var songs = $(response).find("song");
+           var output = "<table id=\"stable\" border=\"0\" cellpadding=\"3\"><tr><td width=85%>Title</td><td>ID</td></tr>";
+           songs.each(function(){
+                         song_no = $(this).children("id").text();
+                         title = $(this).children("unititle").text();
+                         output = output + "<tr><td>" + title + "</td><td>" + song_no + "</td></tr>";
+           });
+           output = output + "</table>";
+           $("#lyrics-box").fadeIn(1500, function(){ $("#lyrics-box").html(output); });
+
+           $("tr").click(function(event){
+             var index = $("tr").index(this);
+             song_no = this.lastChild.innerHTML;
+             $("#lyrics-box").html('');             //just in case
+             $.ajax({
+               type     : "POST",
+               url      : baseurl + "show/" + song_no + ".xml",
+               dataType : "xml",
+               success  : function(content){
+                             song = processSong( content );
+                             var output = "";
+                             if(!song) {
+                               output = "<p>Did not find any lyrics matching your request.</p>";
+                               $("#lyrics-box").fadeIn(1500, function(){ $("#lyrics-box").html(output); });
+                             }
+                             else {
+                               var output = "<table border=\"0\" cellpadding=\"0\" style=\"color:#000;font-size:.8em\"> <tr><td>Song: {title} </td></tr> <tr><td>From: {album} {year} </td></tr> <tr><td>Music Director: {composer} </td></tr> <tr><td>Lyrics: {lyricist}</td></tr> <tr><td>Singers: {singer} </td></tr> </table><p style=\"color:#000;font-size:.8em\"> {lyrics} </p><hr/><div style=\"margin-left:1em\">{links}</div>";
+                               output = output.replace( "{title}", song.title );
+                               output = output.replace( "{album}", song.album );
+                               if(song.year) { output = output.replace( "{year}", ' @ ' + song.year ); }
+                               else { output = output.replace( "{year}", '' ); }
+                               output = output.replace( "{composer}", song.composer );
+                               output = output.replace( "{lyricist}", song.lyricist );
+                               output = output.replace( "{singer}", song.singer );
+                               song.lyrics = song.lyrics.replace( /[\n]*/, "\n" );      //replace multiple newlines with one
+                               song.lyrics = song.lyrics.replace( /\n/g, "\<br /\>" );   //replace newlines with line breaks
+                               output = output.replace( "{lyrics}", song.lyrics );
+                               output = output.replace( "{links}", "<a href='http://lyricsindia.net/'>LyricsIndia</a>" );
+                               $("#lyrics-box").fadeIn(1500, function(){ $("#lyrics-box").html(output); });
+                             }
+                          },
+               error    : function() {
+                           var msg = "Sorry but there was an error.";
+                           $("#lyrics-box").html(msg + xhr.status + " " + xhr.statusText);
+                         }
+             });
+             song_no = "";
+           });
+         }
+       });
+//         event.preventDefault();
+       return false;
+     });
+  </script>
+</body>
+</html>
